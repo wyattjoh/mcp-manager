@@ -1,0 +1,39 @@
+{
+  "name": "@wyattjoh/mcp-manager",
+  "version": "0.1.0",
+  "description": "CLI tool to manage MCP server configurations across Claude Code and Claude Desktop",
+  "exports": "./main.ts",
+  "tasks": {
+    "start": "deno run --allow-read --allow-write --allow-env=HOME main.ts",
+    "dev": "deno run --allow-read --allow-write --allow-env=HOME --watch main.ts"
+  },
+  "imports": {
+    "@cliffy/command": "jsr:@cliffy/command@^1.0.0-rc.8",
+    "@cliffy/prompt": "jsr:@cliffy/prompt@^1.0.0-rc.8",
+    "@std/path": "jsr:@std/path@^1.1.2",
+    "@std/fs": "jsr:@std/fs@^1.0.19"
+  },
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "exactOptionalPropertyTypes": true
+  },
+  "fmt": {
+    "useTabs": false,
+    "lineWidth": 80,
+    "indentWidth": 2,
+    "semiColons": true,
+    "singleQuote": false,
+    "proseWrap": "preserve"
+  },
+  "lint": {
+    "include": ["main.ts", "lib/**/*.ts"],
+    "rules": {
+      "tags": ["recommended"]
+    }
+  }
+}
