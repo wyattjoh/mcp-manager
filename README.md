@@ -48,6 +48,7 @@ mcp-manager
 ```
 
 This presents a nested menu where you can:
+
 - Toggle individual servers on/off for each client
 - See current enabled/disabled status
 - Apply changes across multiple configurations simultaneously
@@ -94,7 +95,7 @@ mcp-manager --help
 ## Server Type Compatibility
 
 | Server Type | Claude Code | Claude Desktop |
-|-------------|-------------|----------------|
+| ----------- | ----------- | -------------- |
 | stdio       | ✅          | ✅             |
 | http        | ✅          | ❌             |
 | sse         | ✅          | ❌             |
@@ -131,6 +132,7 @@ deno lint
 ## Permissions
 
 The tool requires the following Deno permissions:
+
 - `--allow-read` - Read configuration files
 - `--allow-write` - Write updated configurations
 - `--allow-env=HOME` - Access home directory path
