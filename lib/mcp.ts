@@ -3,6 +3,7 @@ import {
   readClaudeCodeConfig,
   readClaudeDesktopConfig,
   readMcpRegistry,
+  serverConfigsEqual,
   writeClaudeCodeConfig,
   writeClaudeDesktopConfig,
   writeMcpRegistry,
@@ -12,7 +13,9 @@ import {
   ClientSelectOption,
   ClientState,
   ClientType,
+  ConfigConflict,
   McpRegistry,
+  McpServerConfig,
   NestedCheckboxGroup,
 } from "./types.ts";
 
@@ -21,27 +24,53 @@ export const autoImportServers = async (): Promise<McpRegistry> => {
   const claudeCodeConfig = await readClaudeCodeConfig();
   const claudeDesktopConfig = await readClaudeDesktopConfig();
 
+  const conflicts: ConfigConflict[] = [];
   let hasChanges = false;
 
   for (const [name, config] of Object.entries(claudeCodeConfig.mcpServers)) {
+    const normalized = normalizeServerConfig(config);
+    if (!normalized) continue;
+
     if (!registry.mcpServers[name]) {
-      const normalized = normalizeServerConfig(config);
-      if (normalized) {
-        registry.mcpServers[name] = normalized;
-        hasChanges = true;
-        console.log(`📥 Imported server '${name}' from Claude Code`);
-      }
+      registry.mcpServers[name] = normalized;
+      hasChanges = true;
+      console.log(`📥 Imported server '${name}' from Claude Code`);
+    } else if (!serverConfigsEqual(registry.mcpServers[name], normalized)) {
+      conflicts.push({
+        serverName: name,
+        registryConfig: registry.mcpServers[name],
+        clientConfig: normalized,
+        clientSource: "claudeCode",
+      });
     }
   }
 
   for (const [name, config] of Object.entries(claudeDesktopConfig.mcpServers)) {
+    const normalized = normalizeServerConfig({ type: "stdio", ...config });
+    if (!normalized) continue;
+
     if (!registry.mcpServers[name]) {
-      const normalized = normalizeServerConfig({ type: "stdio", ...config });
-      if (normalized) {
-        registry.mcpServers[name] = normalized;
-        hasChanges = true;
-        console.log(`📥 Imported server '${name}' from Claude Desktop`);
+      registry.mcpServers[name] = normalized;
+      hasChanges = true;
+      console.log(`📥 Imported server '${name}' from Claude Desktop`);
+    } else if (!serverConfigsEqual(registry.mcpServers[name], normalized)) {
+      const existingConflict = conflicts.find((c) => c.serverName === name);
+      if (!existingConflict) {
+        conflicts.push({
+          serverName: name,
+          registryConfig: registry.mcpServers[name],
+          clientConfig: normalized,
+          clientSource: "claudeDesktop",
+        });
       }
+    }
+  }
+
+  if (conflicts.length > 0) {
+    const resolvedChanges = await resolveConflicts(conflicts);
+    for (const { serverName, config } of resolvedChanges) {
+      registry.mcpServers[serverName] = config;
+      hasChanges = true;
     }
   }
 
@@ -270,4 +299,97 @@ export const listServers = async (): Promise<void> => {
   console.log(
     `\n📊 Total: ${serverNames.length} servers │ Registry: ~/.mcp.json`,
   );
+};
+
+export const resolveConflicts = async (
+  conflicts: ConfigConflict[],
+): Promise<{ serverName: string; config: McpServerConfig }[]> => {
+  const { Select } = await import("@cliffy/prompt");
+  const resolvedChanges: { serverName: string; config: McpServerConfig }[] = [];
+
+  for (const conflict of conflicts) {
+    console.log(
+      `\n⚠️  Configuration mismatch detected for '${conflict.serverName}'\n`,
+    );
+
+    console.log("Registry Version:");
+    console.log(formatConfig(conflict.registryConfig));
+
+    console.log(
+      `\n${
+        conflict.clientSource === "claudeCode"
+          ? "Claude Code"
+          : "Claude Desktop"
+      } Version:`,
+    );
+    console.log(formatConfig(conflict.clientConfig));
+
+    const choice = await Select.prompt({
+      message: "Which version would you like to keep?",
+      options: [
+        { name: "Keep Registry Version", value: "registry" },
+        {
+          name: `Use ${
+            conflict.clientSource === "claudeCode"
+              ? "Claude Code"
+              : "Claude Desktop"
+          } Version`,
+          value: "client",
+        },
+        { name: "Skip (keep registry unchanged)", value: "skip" },
+      ],
+    });
+
+    if (choice === "client") {
+      resolvedChanges.push({
+        serverName: conflict.serverName,
+        config: conflict.clientConfig,
+      });
+      console.log(
+        `✅ Will update registry with ${
+          conflict.clientSource === "claudeCode"
+            ? "Claude Code"
+            : "Claude Desktop"
+        } version`,
+      );
+    } else if (choice === "registry") {
+      console.log("✅ Keeping registry version");
+    } else {
+      console.log("⏭️  Skipped");
+    }
+  }
+
+  return resolvedChanges;
+};
+
+const formatConfig = (config: McpServerConfig): string => {
+  const lines: string[] = [];
+
+  lines.push(`  Type: ${config.type || "stdio"}`);
+
+  if (config.type === "http" || config.type === "sse") {
+    lines.push(`  URL: ${config.url}`);
+    if (config.headers && Object.keys(config.headers).length > 0) {
+      lines.push("  Headers:");
+      for (const [key, value] of Object.entries(config.headers)) {
+        lines.push(`    ${key}: ${value}`);
+      }
+    }
+  } else {
+    lines.push(`  Command: ${config.command}`);
+    if (config.args && config.args.length > 0) {
+      lines.push("  Args:");
+      for (const arg of config.args) {
+        lines.push(`    - ${arg}`);
+      }
+    }
+    if (config.env && Object.keys(config.env).length > 0) {
+      lines.push("  Environment:");
+      for (const [key, value] of Object.entries(config.env)) {
+        lines.push(`    ${key}: ${value}`);
+      }
+    }
+  }
+
+  return lines.join("\n");
 };

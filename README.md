@@ -17,10 +17,10 @@ A CLI tool to manage MCP (Model Context Protocol) server configurations across C
 
 ```bash
 # Install globally
-deno install -gA jsr:@wyattjoh/mcp-manager@0.1.0
+deno install -gA jsr:@wyattjoh/mcp-manager@0.2.0
 
 # Run directly without installation
-deno run -A jsr:@wyattjoh/mcp-manager@0.1.0
+deno run -A jsr:@wyattjoh/mcp-manager@0.2.0
 ```
 
 ### From Source

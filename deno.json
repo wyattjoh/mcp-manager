@@ -1,6 +1,6 @@
 {
   "name": "@wyattjoh/mcp-manager",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "CLI tool to manage MCP server configurations across Claude Code and Claude Desktop",
   "exports": "./main.ts",
   "tasks": {

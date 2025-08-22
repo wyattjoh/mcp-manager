@@ -131,3 +131,33 @@ export const normalizeServerConfig = (
 
   return null;
 };
+
+export const serverConfigsEqual = (
+  configA: McpServerConfig,
+  configB: McpServerConfig,
+): boolean => {
+  if (configA.type !== configB.type) {
+    return false;
+  }
+
+  if (configA.type === "http" && configB.type === "http") {
+    return configA.url === configB.url &&
+      JSON.stringify(configA.headers || {}) ===
+        JSON.stringify(configB.headers || {});
+  }
+
+  if (configA.type === "sse" && configB.type === "sse") {
+    return configA.url === configB.url &&
+      JSON.stringify(configA.headers || {}) ===
+        JSON.stringify(configB.headers || {});
+  }
+
+  if (configA.type === "stdio" && configB.type === "stdio") {
+    return configA.command === configB.command &&
+      JSON.stringify(configA.args || []) ===
+        JSON.stringify(configB.args || []) &&
+      JSON.stringify(configA.env || {}) === JSON.stringify(configB.env || {});
+  }
+
+  return false;
+};

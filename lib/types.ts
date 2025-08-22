@@ -58,3 +58,10 @@ export interface ClientSelectOption {
   name: string;
   value: ClientType;
 }
+
+export interface ConfigConflict {
+  serverName: string;
+  registryConfig: McpServerConfig;
+  clientConfig: McpServerConfig;
+  clientSource: "claudeCode" | "claudeDesktop";
+}
