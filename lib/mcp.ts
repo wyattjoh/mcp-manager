@@ -1,3 +1,4 @@
+import { Confirm, Select } from "@cliffy/prompt";
 import {
   normalizeServerConfig,
   readClaudeCodeConfig,
@@ -16,6 +17,7 @@ import {
   ConfigConflict,
   McpRegistry,
   McpServerConfig,
+  McpStdioServerConfig,
   NestedCheckboxGroup,
 } from "./types.ts";
 
@@ -71,6 +73,29 @@ export const autoImportServers = async (): Promise<McpRegistry> => {
     for (const { serverName, config } of resolvedChanges) {
       registry.mcpServers[serverName] = config;
       hasChanges = true;
+    }
+
+    if (resolvedChanges.length > 0) {
+      console.log(
+        `\n🔄 ${resolvedChanges.length} conflict${
+          resolvedChanges.length > 1 ? "s" : ""
+        } resolved in registry.`,
+      );
+
+      const shouldSync = await Confirm.prompt({
+        message: "Update all clients with the resolved configurations?",
+        default: true,
+      });
+
+      if (shouldSync) {
+        console.log("\n📝 Updating all clients...");
+        await syncAllClientsWithRegistry(registry);
+        console.log("💡 Restart Claude applications to apply changes.");
+      } else {
+        console.log(
+          "⏭️  Skipped client updates. Use interactive mode to configure clients.",
+        );
+      }
     }
   }
 
@@ -196,6 +221,61 @@ export const parseSelections = (
   return { code, desktop };
 };
 
+export const syncAllClientsWithRegistry = async (
+  registry: McpRegistry,
+): Promise<void> => {
+  const claudeCodeConfig = await readClaudeCodeConfig();
+  const claudeDesktopConfig = await readClaudeDesktopConfig();
+
+  // Get current enabled state before clearing configs
+  const currentState = await getCurrentState();
+
+  const newClaudeCodeServers: Record<string, McpServerConfig> = {};
+  const newClaudeDesktopServers: Record<
+    string,
+    Omit<McpStdioServerConfig, "type">
+  > = {};
+
+  let codeCount = 0;
+  let desktopCount = 0;
+  let skippedCount = 0;
+
+  // Only sync servers that are currently enabled in each client
+  for (const [serverName, config] of Object.entries(registry.mcpServers)) {
+    if (currentState.claudeCode[serverName]) {
+      newClaudeCodeServers[serverName] = config;
+      codeCount++;
+    }
+
+    if (currentState.claudeDesktop[serverName]) {
+      if (config.type === "http" || config.type === "sse") {
+        console.warn(
+          `⚠️  Skipping '${serverName}' for Claude Desktop: ${config.type} servers not supported`,
+        );
+        skippedCount++;
+      } else {
+        const { type: _type, ...desktopConfig } = config;
+        newClaudeDesktopServers[serverName] = desktopConfig;
+        desktopCount++;
+      }
+    }
+  }
+
+  claudeCodeConfig.mcpServers = newClaudeCodeServers;
+  claudeDesktopConfig.mcpServers = newClaudeDesktopServers;
+
+  await Promise.all([
+    writeClaudeCodeConfig(claudeCodeConfig),
+    writeClaudeDesktopConfig(claudeDesktopConfig),
+  ]);
+
+  console.log(
+    `✅ Updated client configurations: Claude Code (${codeCount}), Claude Desktop (${desktopCount})${
+      skippedCount > 0 ? `, ${skippedCount} skipped` : ""
+    }`,
+  );
+};
+
 export const applySelections = async (
   registry: McpRegistry,
   selections: { code: Set<string>; desktop: Set<string> },
@@ -304,7 +384,6 @@ export const listServers = async (): Promise<void> => {
 export const resolveConflicts = async (
   conflicts: ConfigConflict[],
 ): Promise<{ serverName: string; config: McpServerConfig }[]> => {
-  const { Select } = await import("@cliffy/prompt");
   const resolvedChanges: { serverName: string; config: McpServerConfig }[] = [];
 
   for (const conflict of conflicts) {
